@@ -2,10 +2,20 @@
 
 Monochrome 3D wireframe celestial mechanics visualization in Rust (Macroquad), inspired by Edward Zajac's 1963 Bell Labs computer animation *Two-Gyro Gravity-Gradient Satellite Attitude Simulation*.
 
-- Spherically gridded wireframe planet (latitude rings + meridians)
-- Box satellite on an eccentric Keplerian orbit (Newton-solved)
-- Orbit path trail and gravity-gradient indicator line
-- Slow orbiting camera, auto-fits any viewport aspect (desktop + phone)
+## Six orbital mechanics models
+
+| Key | Model |
+|---|---|
+| `1` | Binary star system (mutual gravitation, center of mass) |
+| `2` | Multi-planet solar system (Kepler harmonic law, speed labels) |
+| `3` | Kepler's second law (equal swept areas, wedge shading) |
+| `4` | Orbital energy & escape trajectories (bound / parabolic / hyperbolic) |
+| `5` | Geostationary vs low Earth orbit (rotating Earth grid) |
+| `6` | Highly eccentric cometary trajectory (perihelion whip + tail) |
+
+Controls: `1`-`6` switch models, `R` reset view, `Z`/`X` zoom, drag to tilt, mouse wheel / pinch / on-screen `+`/`-` buttons to zoom.
+
+Visual standard: white/light-grey wireframe lines on pitch-black, viewport auto-fits any aspect (desktop or phone).
 
 ## Run on desktop
 
@@ -13,7 +23,7 @@ Monochrome 3D wireframe celestial mechanics visualization in Rust (Macroquad), i
 cargo run --release
 ```
 
-Requires Rust + OpenGL. Window is white/light-grey lines on black.
+Requires Rust + OpenGL.
 
 ## Play in the browser (WASM)
 
