@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 permissions:
   contents: read
@@ -14,29 +14,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - run: cargo build --release --target wasm32-unknown-unknown
-      - run: |
+
+      - name: Build prod (main)
+        run: |
+          git checkout main 2>/dev/null || git checkout -b main origin/main
+          cargo build --release --target wasm32-unknown-unknown
+
+      - name: Build dev
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          git checkout dev 2>/dev/null || git checkout -b dev origin/dev
+          cargo build --release --features dev-overlay --target wasm32-unknown-unknown
+
+      - name: Assemble prod
+        run: |
           mkdir -p dist
-          cp index.html dist/
-          cp web/mq_js_bundle.js dist/
+          git show main:index.html > dist/index.html
+          git show main:web/mq_js_bundle.js > dist/mq_js_bundle.js
           cp target/wasm32-unknown-unknown/release/retro_orbit_visualizer.wasm dist/
+
+      - name: Assemble dev
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          mkdir -p dist/dev
+          git show dev:index.html > dist/dev/index.html
+          git show dev:web/mq_js_bundle.js > dist/dev/mq_js_bundle.js
+          cp target/wasm32-unknown-unknown/release/retro_orbit_visualizer.wasm dist/dev/
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
+      - name: Deploy
+        id: deployment
         uses: actions/deploy-pages@v4
