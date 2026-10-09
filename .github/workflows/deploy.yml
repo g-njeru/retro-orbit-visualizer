@@ -29,12 +29,14 @@ jobs:
         run: |
           git checkout main 2>/dev/null || git checkout -B main origin/main
           cargo build --release --target wasm32-unknown-unknown
+          cp target/wasm32-unknown-unknown/release/retro_orbit_visualizer.wasm /tmp/prod.wasm
 
       - name: Build dev
         run: |
           if git show-ref --verify --quiet refs/remotes/origin/dev; then
             git checkout -B dev origin/dev
             cargo build --release --features dev-overlay --target wasm32-unknown-unknown
+            cp target/wasm32-unknown-unknown/release/retro_orbit_visualizer.wasm /tmp/dev.wasm
           fi
 
       - name: Assemble prod
@@ -42,7 +44,7 @@ jobs:
           mkdir -p dist
           git show main:index.html > dist/index.html
           git show main:web/mq_js_bundle.js > dist/mq_js_bundle.js
-          cp target/wasm32-unknown-unknown/release/retro_orbit_visualizer.wasm dist/
+          cp /tmp/prod.wasm dist/retro_orbit_visualizer.wasm
 
       - name: Assemble dev
         run: |
@@ -50,7 +52,7 @@ jobs:
             mkdir -p dist/dev
             git show dev:index.html > dist/dev/index.html
             git show dev:web/mq_js_bundle.js > dist/dev/mq_js_bundle.js
-            cp target/wasm32-unknown-unknown/release/retro_orbit_visualizer.wasm dist/dev/
+            cp /tmp/dev.wasm dist/dev/retro_orbit_visualizer.wasm
           fi
 
       - uses: actions/upload-pages-artifact@v3
