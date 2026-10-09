@@ -2,8 +2,23 @@ use macroquad::prelude::*;
 
 const FOV_Y: f32 = 50.0_f32.to_radians();
 
+const MODES: [Mode; 7] = [
+    Mode::GravityGradient,
+    Mode::BinaryStars,
+    Mode::MultiPlanet,
+    Mode::KeplerAreas,
+    Mode::Energy,
+    Mode::GeoLeo,
+    Mode::Comet,
+];
+
+fn mode_index(mode: Mode) -> usize {
+    MODES.iter().position(|m| *m == mode).unwrap_or(0)
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
+    GravityGradient,
     BinaryStars,
     MultiPlanet,
     KeplerAreas,
@@ -20,33 +35,38 @@ struct ModeCfg {
 
 fn mode_cfg(mode: Mode) -> ModeCfg {
     match mode {
+        Mode::GravityGradient => ModeCfg {
+            name: "MODEL 1: GRAVITY-GRADIENT SATELLITE (1963 ZAJAC)",
+            eq: "KEPLER ELLIPSE e = 0.5   NADIR GRAVITY-GRADIENT ALIGNMENT",
+            base_radius: 8.5,
+        },
         Mode::BinaryStars => ModeCfg {
-            name: "MODEL 1: BINARY STAR SYSTEM (MUTUAL GRAVITATION)",
+            name: "MODEL 2: BINARY STAR SYSTEM (MUTUAL GRAVITATION)",
             eq: "F = G M1 M2 / r^2   T^2 = 4PI^2 a^3 / (G(M1+M2))",
             base_radius: 9.0,
         },
         Mode::MultiPlanet => ModeCfg {
-            name: "MODEL 2: MULTI-PLANET SYSTEM (KEPLER HARMONIC LAW)",
+            name: "MODEL 3: MULTI-PLANET SYSTEM (KEPLER HARMONIC LAW)",
             eq: "v = sqrt(GM/r)   T ~ r^(3/2)",
             base_radius: 17.5,
         },
         Mode::KeplerAreas => ModeCfg {
-            name: "MODEL 3: KEPLER 2ND LAW (EQUAL AREAS)",
+            name: "MODEL 4: KEPLER 2ND LAW (EQUAL AREAS)",
             eq: "dA/dt = L/(2m) = const   r(t) = a(1-e^2)/(1+e cos t)",
             base_radius: 16.5,
         },
         Mode::Energy => ModeCfg {
-            name: "MODEL 4: ORBITAL ENERGY & ESCAPE TRAJECTORIES",
+            name: "MODEL 5: ORBITAL ENERGY & ESCAPE TRAJECTORIES",
             eq: "E = v^2/2 - GM/r   v_esc = sqrt(2) v_circ",
             base_radius: 15.0,
         },
         Mode::GeoLeo => ModeCfg {
-            name: "MODEL 5: GEOSTATIONARY vs LOW EARTH ORBIT",
+            name: "MODEL 6: GEOSTATIONARY vs LOW EARTH ORBIT",
             eq: "T = 2PI sqrt(r^3/(GM))   GEO: T_orbit = T_earth",
             base_radius: 12.0,
         },
         Mode::Comet => ModeCfg {
-            name: "MODEL 6: HIGHLY ECCENTRIC COMET",
+            name: "MODEL 7: HIGHLY ECCENTRIC COMET",
             eq: "v_p/v_a = (1+e)/(1-e) = 12.3 for e = 0.85",
             base_radius: 24.0,
         },
@@ -79,12 +99,16 @@ struct State {
     leo_angle: f32,
     geo_angle: f32,
     comet_angle: f32,
+    gg_angle: f32,
     prev_pinch: Option<f32>,
 }
 
 fn reset_mode(state: &mut State, mode: Mode) {
     state.mode = mode;
     match mode {
+        Mode::GravityGradient => {
+            state.gg_angle = 0.0;
+        }
         Mode::BinaryStars => {
             state.bin_angle = 0.0;
             state.spin1 = 0.0;
@@ -289,20 +313,29 @@ fn fit_camera(dt: f32, state: &mut State) {
     let m = 14.0;
     let plus = Rect::new(w - s - m, h - 2.0 * s - 3.0 * m, s, s);
     let minus = Rect::new(w - s - m, h - s - m, s, s);
+    let prev = Rect::new(m, h * 0.5 - s - m, s, s);
+    let next = Rect::new(m, h * 0.5 + m, s, s);
 
-    if !plus.contains(mouse_position_local()) && !minus.contains(mouse_position_local()) {
+    let ml = mouse_position_local();
+    let over_ui = plus.contains(ml) || minus.contains(ml) || prev.contains(ml) || next.contains(ml);
+
+    if !over_ui {
         if is_mouse_button_down(MouseButton::Left) {
             let delta = mouse_delta_position();
             state.yaw -= delta.x * 1.5;
             state.pitch = (state.pitch + delta.y * 1.5).clamp(-1.2, 1.2);
         }
-    } else {
-        if is_mouse_button_pressed(MouseButton::Left) {
-            if plus.contains(mouse_position_local()) {
-                state.zoom = (state.zoom * 1.25).clamp(0.25, 6.0);
-            } else {
-                state.zoom = (state.zoom / 1.25).clamp(0.25, 6.0);
-            }
+    } else if is_mouse_button_pressed(MouseButton::Left) {
+        if plus.contains(ml) {
+            state.zoom = (state.zoom * 1.25).clamp(0.25, 6.0);
+        } else if minus.contains(ml) {
+            state.zoom = (state.zoom / 1.25).clamp(0.25, 6.0);
+        } else if prev.contains(ml) {
+            let idx = (mode_index(state.mode) + MODES.len() - 1) % MODES.len();
+            reset_mode(state, MODES[idx]);
+        } else if next.contains(ml) {
+            let idx = (mode_index(state.mode) + 1) % MODES.len();
+            reset_mode(state, MODES[idx]);
         }
     }
 
@@ -340,22 +373,65 @@ fn fit_camera(dt: f32, state: &mut State) {
 
     draw_rectangle_lines(plus.x, plus.y, plus.w, plus.h, 2.0, LIGHTGRAY);
     draw_rectangle_lines(minus.x, minus.y, minus.w, minus.h, 2.0, LIGHTGRAY);
+    draw_rectangle_lines(prev.x, prev.y, prev.w, prev.h, 2.0, LIGHTGRAY);
+    draw_rectangle_lines(next.x, next.y, next.w, next.h, 2.0, LIGHTGRAY);
     draw_text("+", plus.x + plus.w * 0.5 - 12.0, plus.y + plus.h * 0.5 + 8.0, 30.0, WHITE);
     draw_text("-", minus.x + minus.w * 0.5 - 10.0, minus.y + minus.h * 0.5 + 8.0, 30.0, WHITE);
+    draw_text("<", prev.x + prev.w * 0.5 - 12.0, prev.y + prev.h * 0.5 + 8.0, 30.0, WHITE);
+    draw_text(">", next.x + next.w * 0.5 - 10.0, next.y + next.h * 0.5 + 8.0, 30.0, WHITE);
 }
 
 fn hud(state: &State) {
     let cfg = mode_cfg(state.mode);
     let dim = Color::new(0.45, 0.45, 0.45, 1.0);
-    draw_text(cfg.name, 14.0, 26.0, 22.0, WHITE);
+    let header = format!("MODEL {}/7  -  {}", mode_index(state.mode) + 1, cfg.name);
+    draw_text(&header, 14.0, 26.0, 22.0, WHITE);
     draw_text(cfg.eq, 14.0, 48.0, 18.0, LIGHTGRAY);
     draw_text(
-        "KEYS 1-6 MODELS   R RESET   Z/X ZOOM   DRAG TILT   WHEEL/PINCH ZOOM   BUTTONS ZOOM",
+        "KEYS 1-7 MODELS   < > NEXT/PREV   R RESET   Z/X ZOOM   DRAG TILT   WHEEL/PINCH ZOOM",
         14.0,
         screen_height() - 14.0,
         16.0,
         dim,
     );
+    #[cfg(feature = "dev-overlay")]
+    {
+        let dim_red = Color::new(0.6, 0.6, 0.6, 1.0);
+        draw_text("DEV BUILD", screen_width() - 110.0, 26.0, 22.0, dim_red);
+        let fps = format!("FPS {}", get_fps());
+        draw_text(&fps, screen_width() - 110.0, 48.0, 16.0, dim_red);
+    }
+}
+
+fn rotate_x(v: Vec3, a: f32) -> Vec3 {
+    let (s, c) = a.sin_cos();
+    vec3(v.x, v.y * c - v.z * s, v.y * s + v.z * c)
+}
+
+fn rotate_z(v: Vec3, a: f32) -> Vec3 {
+    let (s, c) = a.sin_cos();
+    vec3(v.x * c - v.y * s, v.x * s + v.y * c, v.z)
+}
+
+fn to_world(perifocal: Vec3) -> Vec3 {
+    rotate_x(rotate_z(perifocal, 0.7), 0.5)
+}
+
+fn draw_gravity_gradient(state: &mut State, dt: f32, cam_dim: Color) {
+    let path = orbit_path(4.0, 0.5, 128)
+        .iter()
+        .cloned()
+        .map(to_world)
+        .collect::<Vec<_>>();
+    draw_polyline(&path, cam_dim);
+
+    draw_wireframe_sphere(vec3(0.0, 0.0, 0.0), 1.0, state.gg_angle, 7, 6, LIGHTGRAY);
+
+    state.gg_angle += dt * 0.6;
+    let pos = to_world(kepler_point(4.0, 0.5, state.gg_angle));
+    let gradient_dir = -pos.normalize();
+    draw_line_3d(pos, vec3(0.0, 0.0, 0.0), cam_dim);
+    draw_wireframe_box(pos, gradient_dir, vec3(0.12, 0.12, 0.35), WHITE);
 }
 
 fn draw_binary(state: &mut State, dt: f32, cam_dim: Color) {
@@ -517,11 +593,6 @@ fn draw_geo_leo(state: &mut State, dt: f32, cam: &Cam, cam_dim: Color) {
     draw_3d_label(cam, geo_pos + vec3(0.0, 0.9, 0.0), "GEO  T = 10 s", WHITE);
 }
 
-fn rotate_x(v: Vec3, a: f32) -> Vec3 {
-    let (s, c) = a.sin_cos();
-    vec3(v.x, v.y * c - v.z * s, v.y * s + v.z * c)
-}
-
 fn draw_comet(state: &mut State, dt: f32, cam: &Cam, cam_dim: Color) {
     let a = 12.0;
     let e = 0.85;
@@ -570,7 +641,7 @@ fn window_conf() -> Conf {
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut state = State {
-        mode: Mode::BinaryStars,
+        mode: Mode::GravityGradient,
         yaw: 0.4,
         pitch: 0.35,
         zoom: 1.0,
@@ -588,9 +659,10 @@ async fn main() {
         leo_angle: 0.0,
         geo_angle: 0.0,
         comet_angle: 0.0,
+        gg_angle: 0.0,
         prev_pinch: None,
     };
-    reset_mode(&mut state, Mode::BinaryStars);
+    reset_mode(&mut state, Mode::GravityGradient);
 
     let cam_dim = Color::new(0.4, 0.4, 0.4, 1.0);
 
@@ -599,23 +671,19 @@ async fn main() {
 
         let dt = get_frame_time().min(0.1);
 
-        if is_key_pressed(KeyCode::Key1) {
-            reset_mode(&mut state, Mode::BinaryStars);
-        }
-        if is_key_pressed(KeyCode::Key2) {
-            reset_mode(&mut state, Mode::MultiPlanet);
-        }
-        if is_key_pressed(KeyCode::Key3) {
-            reset_mode(&mut state, Mode::KeplerAreas);
-        }
-        if is_key_pressed(KeyCode::Key4) {
-            reset_mode(&mut state, Mode::Energy);
-        }
-        if is_key_pressed(KeyCode::Key5) {
-            reset_mode(&mut state, Mode::GeoLeo);
-        }
-        if is_key_pressed(KeyCode::Key6) {
-            reset_mode(&mut state, Mode::Comet);
+        let key_modes = [
+            (KeyCode::Key1, Mode::GravityGradient),
+            (KeyCode::Key2, Mode::BinaryStars),
+            (KeyCode::Key3, Mode::MultiPlanet),
+            (KeyCode::Key4, Mode::KeplerAreas),
+            (KeyCode::Key5, Mode::Energy),
+            (KeyCode::Key6, Mode::GeoLeo),
+            (KeyCode::Key7, Mode::Comet),
+        ];
+        for (key, mode) in key_modes {
+            if is_key_pressed(key) {
+                reset_mode(&mut state, mode);
+            }
         }
 
         fit_camera(dt, &mut state);
@@ -631,6 +699,7 @@ async fn main() {
         });
 
         match state.mode {
+            Mode::GravityGradient => draw_gravity_gradient(&mut state, dt, cam_dim),
             Mode::BinaryStars => draw_binary(&mut state, dt, cam_dim),
             Mode::MultiPlanet => draw_multi_planet(&mut state, dt, &cam, cam_dim),
             Mode::KeplerAreas => draw_areas(&mut state, dt, cam_dim),
