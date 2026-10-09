@@ -11,7 +11,7 @@ permissions:
 jobs:
   release-plz:
     name: Release-plz (release PR)
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(main): release') }}
+    if: "${{ !startsWith(github.event.head_commit.message, 'chore(main): release') }}"
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,7 +26,7 @@ jobs:
 
   release:
     name: Release (publish)
-    if: ${{ startsWith(github.event.head_commit.message, 'chore(main): release') }}
+    if: "${{ startsWith(github.event.head_commit.message, 'chore(main): release') }}"
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
