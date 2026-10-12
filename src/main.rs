@@ -183,33 +183,36 @@ fn orbit_path(a: f32, e: f32, segments: usize) -> Vec<Vec3> {
     points
 }
 
-fn draw_wireframe_sphere(center: Vec3, radius: f32, rot_y: f32, lat_steps: usize, lon_steps: usize, color: Color) {
+fn draw_wireframe_sphere(
+    center: Vec3,
+    radius: f32,
+    rot_y: f32,
+    lat_steps: usize,
+    lon_steps: usize,
+    color: Color,
+) {
     let segments = 40;
     for i in 1..lat_steps {
         let lat = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / lat_steps as f32;
         let mut ring = Vec::with_capacity(segments + 1);
         for j in 0..=segments {
             let az = j as f32 / segments as f32 * std::f32::consts::TAU;
-            let p = center + vec3(
+            let local = vec3(
                 radius * lat.cos() * az.cos(),
                 radius * lat.sin(),
                 radius * lat.cos() * az.sin(),
             );
-            ring.push(rotate_y(p, rot_y));
+            ring.push(center + rotate_y(local, rot_y));
         }
         draw_polyline(&ring, color);
     }
     for i in 0..lon_steps {
-        let az = i as f32 / lon_steps as f32 * std::f32::consts::PI;
+        let lon = i as f32 / lon_steps as f32 * std::f32::consts::PI;
         let mut meridian = Vec::with_capacity(segments + 1);
         for j in 0..=segments {
-            let elev = -std::f32::consts::FRAC_PI_2 + j as f32 / segments as f32 * std::f32::consts::PI;
-            let p = center + vec3(
-                radius * elev.cos() * az.cos(),
-                radius * elev.sin(),
-                radius * elev.cos() * az.sin(),
-            );
-            meridian.push(rotate_y(p, rot_y));
+            let angle = j as f32 / segments as f32 * std::f32::consts::TAU;
+            let local = vec3(radius * angle.cos(), radius * angle.sin(), 0.0);
+            meridian.push(center + rotate_y(local, rot_y + lon));
         }
         draw_polyline(&meridian, color);
     }
@@ -232,9 +235,18 @@ fn draw_wireframe_box(center: Vec3, forward: Vec3, half: Vec3, color: Color) {
         *corner = center + r * (sx * half.x) + u * (sy * half.y) + f * (sz * half.z);
     }
     let edges: [(usize, usize); 12] = [
-        (0, 1), (1, 3), (3, 2), (2, 0),
-        (4, 5), (5, 7), (7, 6), (6, 4),
-        (0, 4), (1, 5), (2, 6), (3, 7),
+        (0, 1),
+        (1, 3),
+        (3, 2),
+        (2, 0),
+        (4, 5),
+        (5, 7),
+        (7, 6),
+        (6, 4),
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7),
     ];
     for (a, b) in edges {
         draw_line_3d(corners[a], corners[b], color);
@@ -287,7 +299,7 @@ fn build_cam(state: &State, cfg: &ModeCfg) -> Cam {
     }
 }
 
-fn project(cam: &Cam, p: Vec3) -> Option<(f32, f32)> {
+fn project_with(cam: &Cam, p: Vec3, sw: f32, sh: f32) -> Option<(f32, f32)> {
     let rel = p - cam.pos;
     let cz = rel.dot(cam.fwd);
     if cz <= 0.01 {
@@ -295,8 +307,12 @@ fn project(cam: &Cam, p: Vec3) -> Option<(f32, f32)> {
     }
     let cx = rel.dot(cam.right);
     let cy = rel.dot(cam.up);
-    let scale = screen_height() * 0.5 / (FOV_Y * 0.5).tan();
-    Some((screen_width() * 0.5 + cx * scale / cz, screen_height() * 0.5 - cy * scale / cz))
+    let scale = sh * 0.5 / (FOV_Y * 0.5).tan();
+    Some((sw * 0.5 + cx * scale / cz, sh * 0.5 - cy * scale / cz))
+}
+
+fn project(cam: &Cam, p: Vec3) -> Option<(f32, f32)> {
+    project_with(cam, p, screen_width(), screen_height())
 }
 
 fn draw_3d_label(cam: &Cam, p: Vec3, text: &str, color: Color) {
@@ -306,7 +322,7 @@ fn draw_3d_label(cam: &Cam, p: Vec3, text: &str, color: Color) {
     }
 }
 
-fn fit_camera(dt: f32, state: &mut State) {
+fn ui_rects() -> (Rect, Rect, Rect, Rect) {
     let w = screen_width();
     let h = screen_height();
     let s = 56.0;
@@ -315,8 +331,13 @@ fn fit_camera(dt: f32, state: &mut State) {
     let minus = Rect::new(w - s - m, h - s - m, s, s);
     let prev = Rect::new(m, h * 0.5 - s - m, s, s);
     let next = Rect::new(m, h * 0.5 + m, s, s);
+    (plus, minus, prev, next)
+}
 
-    let ml = mouse_position_local();
+fn fit_camera(dt: f32, state: &mut State) {
+    let (plus, minus, prev, next) = ui_rects();
+
+    let ml = vec2(mouse_position().0, mouse_position().1);
     let over_ui = plus.contains(ml) || minus.contains(ml) || prev.contains(ml) || next.contains(ml);
 
     if !over_ui {
@@ -370,15 +391,6 @@ fn fit_camera(dt: f32, state: &mut State) {
     if !is_mouse_button_down(MouseButton::Left) {
         state.yaw += dt * 0.08;
     }
-
-    draw_rectangle_lines(plus.x, plus.y, plus.w, plus.h, 2.0, LIGHTGRAY);
-    draw_rectangle_lines(minus.x, minus.y, minus.w, minus.h, 2.0, LIGHTGRAY);
-    draw_rectangle_lines(prev.x, prev.y, prev.w, prev.h, 2.0, LIGHTGRAY);
-    draw_rectangle_lines(next.x, next.y, next.w, next.h, 2.0, LIGHTGRAY);
-    draw_text("+", plus.x + plus.w * 0.5 - 12.0, plus.y + plus.h * 0.5 + 8.0, 30.0, WHITE);
-    draw_text("-", minus.x + minus.w * 0.5 - 10.0, minus.y + minus.h * 0.5 + 8.0, 30.0, WHITE);
-    draw_text("<", prev.x + prev.w * 0.5 - 12.0, prev.y + prev.h * 0.5 + 8.0, 30.0, WHITE);
-    draw_text(">", next.x + next.w * 0.5 - 10.0, next.y + next.h * 0.5 + 8.0, 30.0, WHITE);
 }
 
 fn hud(state: &State) {
@@ -393,6 +405,39 @@ fn hud(state: &State) {
         screen_height() - 14.0,
         16.0,
         dim,
+    );
+    let (plus, minus, prev, next) = ui_rects();
+    draw_rectangle_lines(plus.x, plus.y, plus.w, plus.h, 2.0, LIGHTGRAY);
+    draw_rectangle_lines(minus.x, minus.y, minus.w, minus.h, 2.0, LIGHTGRAY);
+    draw_rectangle_lines(prev.x, prev.y, prev.w, prev.h, 2.0, LIGHTGRAY);
+    draw_rectangle_lines(next.x, next.y, next.w, next.h, 2.0, LIGHTGRAY);
+    draw_text(
+        "+",
+        plus.x + plus.w * 0.5 - 12.0,
+        plus.y + plus.h * 0.5 + 8.0,
+        30.0,
+        WHITE,
+    );
+    draw_text(
+        "-",
+        minus.x + minus.w * 0.5 - 10.0,
+        minus.y + minus.h * 0.5 + 8.0,
+        30.0,
+        WHITE,
+    );
+    draw_text(
+        "<",
+        prev.x + prev.w * 0.5 - 12.0,
+        prev.y + prev.h * 0.5 + 8.0,
+        30.0,
+        WHITE,
+    );
+    draw_text(
+        ">",
+        next.x + next.w * 0.5 - 10.0,
+        next.y + next.h * 0.5 + 8.0,
+        30.0,
+        WHITE,
     );
     #[cfg(feature = "dev-overlay")]
     {
@@ -450,8 +495,8 @@ fn draw_binary(state: &mut State, dt: f32, cam_dim: Color) {
     draw_line_3d(vec3(0.0, 0.0, -0.6), vec3(0.0, 0.0, 0.6), cross);
 
     draw_line_3d(p1, p2, LIGHTGRAY);
-    draw_wireframe_sphere(p1, 2.2, state.spin1, 6, 6, WHITE);
-    draw_wireframe_sphere(p2, 1.4, state.spin2, 5, 5, WHITE);
+    draw_wireframe_sphere(p1, 2.2, state.spin1, 7, 6, WHITE);
+    draw_wireframe_sphere(p2, 1.4, state.spin2, 7, 6, WHITE);
 
     state.spin1 += dt * 0.5;
     state.spin2 += dt * 0.9;
@@ -466,7 +511,14 @@ fn draw_multi_planet(state: &mut State, dt: f32, cam: &Cam, cam_dim: Color) {
     for r in radii.iter() {
         draw_orbit_ring(*r, cam_dim);
     }
-    draw_wireframe_sphere(vec3(0.0, 0.0, 0.0), 2.5, state.planet_angles[1], 6, 6, WHITE);
+    draw_wireframe_sphere(
+        vec3(0.0, 0.0, 0.0),
+        2.5,
+        state.planet_angles[1],
+        7,
+        6,
+        WHITE,
+    );
 
     for i in 0..3 {
         let omega = speeds[i] / radii[i];
@@ -475,7 +527,13 @@ fn draw_multi_planet(state: &mut State, dt: f32, cam: &Cam, cam_dim: Color) {
         let pos = vec3(radii[i] * az.cos(), 0.0, radii[i] * az.sin());
         let v = speeds[i];
         draw_wireframe_box(pos, vec3(0.0, 1.0, 0.0), vec3(0.3, 0.3, 0.3), WHITE);
-        let label = format!("v = {:.1}  (sqrt({:.0}/{:.0}) = {:.1})", v, mu, radii[i], (mu / radii[i]).sqrt());
+        let label = format!(
+            "v = {:.1}  (sqrt({:.0}/{:.0}) = {:.1})",
+            v,
+            mu,
+            radii[i],
+            (mu / radii[i]).sqrt()
+        );
         draw_3d_label(cam, pos + vec3(0.0, 1.0, 0.0), &label, LIGHTGRAY);
     }
 }
@@ -489,7 +547,7 @@ fn draw_areas(state: &mut State, dt: f32, cam_dim: Color) {
     let path_color = Color::new(0.35, 0.35, 0.35, 1.0);
     draw_polyline(&path, path_color);
 
-    draw_wireframe_sphere(focus, 0.9, state.kep_angle, 4, 4, WHITE);
+    draw_wireframe_sphere(focus, 0.9, state.kep_angle, 7, 6, WHITE);
 
     state.kep_angle += dt * 0.5;
     let pos = kepler_point(a, e, state.kep_angle);
@@ -521,7 +579,7 @@ fn draw_areas(state: &mut State, dt: f32, cam_dim: Color) {
 
 fn draw_energy(state: &mut State, dt: f32, cam_dim: Color) {
     let mu = 100.0;
-    draw_wireframe_sphere(vec3(0.0, 0.0, 0.0), 3.0, 0.0, 6, 6, LIGHTGRAY);
+    draw_wireframe_sphere(vec3(0.0, 0.0, 0.0), 3.0, 0.0, 7, 6, LIGHTGRAY);
 
     let substeps = 6;
     let h = (dt / substeps as f32).min(0.016);
@@ -544,8 +602,8 @@ fn draw_energy(state: &mut State, dt: f32, cam_dim: Color) {
         Color::new(0.75, 0.75, 0.75, 1.0),
         WHITE,
     ];
-    for i in 0..3 {
-        draw_polyline(&state.e_trails[i], trail_colors[i]);
+    for (trail, color) in state.e_trails.iter().zip(trail_colors) {
+        draw_polyline(trail, color);
     }
     draw_line_3d(state.e_pos[0], vec3(0.0, 0.0, 0.0), cam_dim);
 }
@@ -554,12 +612,24 @@ fn energy_readout(state: &State) {
     let mu = 100.0;
     let labels = ["A E < 0", "B E = 0", "C E > 0"];
     let dim = Color::new(0.5, 0.5, 0.5, 1.0);
-    draw_text("LIVE ENERGY (E = v^2/2 - GM/r):", 14.0, 78.0, 18.0, LIGHTGRAY);
-    for i in 0..3 {
+    draw_text(
+        "LIVE ENERGY (E = v^2/2 - GM/r):",
+        14.0,
+        78.0,
+        18.0,
+        LIGHTGRAY,
+    );
+    for (i, label) in labels.iter().enumerate() {
         let r = state.e_pos[i].length();
         let e = state.e_vel[i].length_squared() * 0.5 - mu / r;
-        let color = if e < -0.01 { dim } else if e > 0.01 { WHITE } else { LIGHTGRAY };
-        let line = format!("{}   E = {:.3}   r = {:.1}", labels[i], e, r);
+        let color = if e < -0.01 {
+            dim
+        } else if e > 0.01 {
+            WHITE
+        } else {
+            LIGHTGRAY
+        };
+        let line = format!("{}   E = {:.3}   r = {:.1}", label, e, r);
         draw_text(&line, 14.0, 100.0 + 22.0 * i as f32, 18.0, color);
     }
 }
@@ -575,17 +645,33 @@ fn draw_geo_leo(state: &mut State, dt: f32, cam: &Cam, cam_dim: Color) {
     state.leo_angle += omega_leo * dt;
     state.geo_angle += omega_earth * dt;
 
-    draw_wireframe_sphere(vec3(0.0, 0.0, 0.0), earth_r, state.earth_rot, 8, 8, LIGHTGRAY);
+    draw_wireframe_sphere(
+        vec3(0.0, 0.0, 0.0),
+        earth_r,
+        state.earth_rot,
+        8,
+        8,
+        LIGHTGRAY,
+    );
 
     let meridian_dir = vec3(state.earth_rot.sin(), 0.0, state.earth_rot.cos());
     draw_line_3d(vec3(0.0, 0.0, 0.0), meridian_dir * earth_r, WHITE);
-    draw_line_3d(meridian_dir * earth_r, meridian_dir * (earth_r + 2.0), cam_dim);
+    draw_line_3d(
+        meridian_dir * earth_r,
+        meridian_dir * (earth_r + 2.0),
+        cam_dim,
+    );
 
     let leo_local = rotate_y(vec3(0.0, r_leo, 0.0), state.leo_angle);
     let leo_pos = rotate_x(leo_local, 1.15);
     draw_wireframe_box(leo_pos, -leo_pos.normalize(), vec3(0.22, 0.22, 0.32), WHITE);
     draw_line_3d(vec3(0.0, 0.0, 0.0), leo_pos, cam_dim);
-    draw_3d_label(cam, leo_pos + vec3(0.0, 0.8, 0.0), "LEO  T = 1.5 s", LIGHTGRAY);
+    draw_3d_label(
+        cam,
+        leo_pos + vec3(0.0, 0.8, 0.0),
+        "LEO  T = 1.5 s",
+        LIGHTGRAY,
+    );
 
     let geo_pos = meridian_dir * r_geo;
     draw_wireframe_box(geo_pos, -geo_pos.normalize(), vec3(0.3, 0.3, 0.4), WHITE);
@@ -602,7 +688,7 @@ fn draw_comet(state: &mut State, dt: f32, cam: &Cam, cam_dim: Color) {
     let path_color = Color::new(0.35, 0.35, 0.35, 1.0);
     draw_polyline(&path, path_color);
 
-    draw_wireframe_sphere(focus, 1.2, state.comet_angle, 4, 4, WHITE);
+    draw_wireframe_sphere(focus, 1.2, state.comet_angle, 7, 6, WHITE);
 
     state.comet_angle += dt * 0.35;
     let pos = kepler_point(a, e, state.comet_angle);
@@ -716,5 +802,79 @@ async fn main() {
         }
 
         next_frame().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kepler_solver_converges() {
+        for e in [0.0, 0.5, 0.85] {
+            for m in [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, std::f32::consts::TAU] {
+                let ea = solve_kepler(m, e);
+                let residual = ea - e * ea.sin() - m;
+                assert!(residual.abs() < 1e-4, "e={e} m={m} residual={residual}");
+            }
+        }
+    }
+
+    #[test]
+    fn kepler_point_matches_focus_distance() {
+        let a = 9.0;
+        for e in [0.0, 0.5, 0.85] {
+            for m in [0.0, 0.7, 2.1, 4.4] {
+                let p = kepler_point(a, e, m);
+                let ea = solve_kepler(m, e);
+                let expected = a * (1.0 - e * ea.cos());
+                assert!(
+                    (p.length() - expected).abs() < 1e-3,
+                    "e={e} m={m} r={} expected={expected}",
+                    p.length()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn kepler_path_is_elliptical_and_bounded() {
+        let a = 12.0;
+        let e = 0.85;
+        let path = orbit_path(a, e, 64);
+        assert_eq!(path.len(), 65);
+        let r_min = a * (1.0 - e) - 1e-3;
+        let r_max = a * (1.0 + e) + 1e-3;
+        for p in &path {
+            let r = p.length();
+            assert!(r >= r_min && r <= r_max, "r={r} out of [{r_min},{r_max}]");
+        }
+    }
+
+    #[test]
+    fn rotations_preserve_length_and_identity() {
+        let v = vec3(1.0, -2.0, 3.0);
+        let len = v.length();
+        for a in [0.0, 0.3, 1.1, std::f32::consts::TAU] {
+            assert!((rotate_x(v, a).length() - len).abs() < 1e-4);
+            assert!((rotate_y(v, a).length() - len).abs() < 1e-4);
+            assert!((rotate_z(v, a).length() - len).abs() < 1e-4);
+        }
+        assert!((rotate_x(v, 0.0) - v).length() < 1e-6);
+        assert!((rotate_y(v, 0.0) - v).length() < 1e-6);
+        assert!((rotate_z(v, 0.0) - v).length() < 1e-6);
+        assert!((to_world(v).length() - len).abs() < 1e-4);
+    }
+
+    #[test]
+    fn project_hides_points_behind_camera() {
+        let cam = Cam {
+            pos: vec3(0.0, 0.0, 5.0),
+            right: vec3(0.0, 1.0, 0.0),
+            up: vec3(0.0, 0.0, 1.0),
+            fwd: vec3(1.0, 0.0, 0.0),
+        };
+        assert!(project_with(&cam, vec3(0.0, 0.0, 0.0), 800.0, 600.0).is_none());
+        assert!(project_with(&cam, vec3(10.0, 0.0, 5.0), 800.0, 600.0).is_some());
     }
 }

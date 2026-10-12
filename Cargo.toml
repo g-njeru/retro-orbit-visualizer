@@ -2,6 +2,10 @@
 name = "retro_orbit_visualizer"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Retro 1963-style monochrome wireframe visualizer of orbital mechanics models"
+repository = "https://github.com/g-njeru/retro-orbit-visualizer"
 
 [dependencies]
 macroquad = "0.4"
