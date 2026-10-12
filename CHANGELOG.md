@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/g-njeru/retro-orbit-visualizer/compare/v0.1.0...v0.1.1) - 2026-10-12
+
+### Fixed
+
+- pointer hit-testing, globe meridians; add tests, MSRV 1.85, CI and pages reliability ([#2](https://github.com/g-njeru/retro-orbit-visualizer/pull/2))
+
+### Other
+
+- use git tags as release-plz baseline (git_only) ([#3](https://github.com/g-njeru/retro-orbit-visualizer/pull/3))
+
 ## [0.1.0](https://github.com/g-njeru/retro-orbit-visualizer/releases/tag/v0.1.0) - 2026-10-09
 
 ### Added
