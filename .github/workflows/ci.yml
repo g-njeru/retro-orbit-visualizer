@@ -60,6 +60,6 @@ jobs:
           sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f
         with:
-          toolchain: "1.80"
+          toolchain: "1.85"
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - run: cargo build --locked
