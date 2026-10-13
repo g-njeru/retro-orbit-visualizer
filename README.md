@@ -2,6 +2,8 @@
 
 Monochrome 3D wireframe celestial mechanics visualization in Rust (Macroquad), inspired by Edward Zajac's 1963 Bell Labs computer animation *Two-Gyro Gravity-Gradient Satellite Attitude Simulation*.
 
+📚 **New here? How it works, explained:** see the [documentation in `docs/`](docs/README.md) — the physics, the math (Kepler's laws, Euler vs. Verlet integration), the 3D camera, and how the build and deployment work.
+
 ## Seven orbital mechanics models
 
 | Key | Model |
