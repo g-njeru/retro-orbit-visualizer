@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/g-njeru/retro-orbit-visualizer/compare/v0.1.1...v0.1.2) - 2026-10-13
+
+### Other
+
+- explainer documentation set ([#7](https://github.com/g-njeru/retro-orbit-visualizer/pull/7))
+
 ## [0.1.1](https://github.com/g-njeru/retro-orbit-visualizer/compare/v0.1.0...v0.1.1) - 2026-10-12
 
 ### Fixed
